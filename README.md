@@ -3,5 +3,6 @@ In this project, I take a company's messy data and then clean it up, removing al
 This makes the data able to be used by data analysts.
 
 Spesicically what the code does:
-Step one: It takes the imported dirty 'bronze' CSV files into SQLite.
-Step two: then it cleans the data and imports it into stage two, the 'silver' layer.
+
+=== "SILVER LAYER GENERATION"
+This takes the dirty 'bronze' CSV files, in SQLite, and it cleans it up and then creates tablean it into a cleaned stage two, the 'silver' layer.
