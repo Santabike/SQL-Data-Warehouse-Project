@@ -7,3 +7,8 @@ Spesicically what the code does:
 === "SILVER LAYER GENERATION"
 
 This takes the dirty 'bronze' CSV files, in SQLite, cleans it up and then creates tables, inserting it into a cleaned stage two, the 'silver' layer.
+
+
+=== "FULL PRODUCT REPORT"
+
+This shows a full data report of all products
