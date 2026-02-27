@@ -1,0 +1,149 @@
+DROP TABLE silver_cust_info;
+CREATE TABLE silver_cust_info (
+    CustomerID INTEGER PRIMARY KEY NOT NULL,
+    FullName TEXT,
+	Gender CHAR(1),
+	MaritalStatus CHAR(1),
+    CustomerCreationDate DATE
+);
+
+WITH CleanedBronzeCustomers  AS (
+	SELECT
+		cst_id AS Cleaned_CustomerID,
+		TRIM(MAX(CASE WHEN cst_firstname IS NOT NULL THEN cst_firstname END)) || ' ' || TRIM(MAX(CASE WHEN cst_lastname IS NOT NULL THEN cst_lastname END))  AS Cleaned_Customer_FullName,
+		TRIM(MAX(CASE WHEN cst_marital_status IS NOT NULL THEN cst_marital_status END))  as Cleaned_MaritalStatus,
+		TRIM(MAX(CASE WHEN cst_gndr IS NOT NULL THEN cst_gndr END))  as Cleaned_CustomerGender,
+		DATE(TRIM(MAX(CASE WHEN cst_create_date IS NOT NULL THEN cst_create_date END))) Cleaned_DateWhenCustomerEnteredInDatabase
+	FROM bronze_cust_info
+	WHERE cst_id IS NOT NULL
+	GROUP BY cst_id
+)
+INSERT INTO silver_cust_info (
+    CustomerID,
+    FullName,
+    Gender,
+    MaritalStatus,
+    CustomerCreationDate
+)
+SELECT *
+FROM CleanedBronzeCustomers;
+
+SELECT * FROM silver_cust_info;
+
+----------------- Clean Sales Info
+DROP TABLE silver_sales_details;
+CREATE TABLE silver_sales_details (
+    OrderNumber INTEGER PRIMARY KEY NOT NULL,
+    ProductKey TEXT,
+	CustomerID INTEGER,
+	OrderDate Date,
+	ShipDate Date,
+    DueDate Date,
+	Sales INTEGER,
+	Quantity INTEGER,
+	Price INTEGER,
+	ProductID INTEGER
+);
+
+WITH CleanedBronzeSales AS (
+    SELECT 
+        CAST(substr(sls_ord_num, 3, 100) AS INTEGER) AS SalesOrderNumber,
+        sls_prd_key AS ProductKey,
+        CAST(sls_cust_id AS int) AS CustomerID,
+        
+        TRIM(MAX(CASE WHEN sls_order_dt IS NOT NULL THEN
+            date(substr(sls_order_dt, 1, 4) || '-' || substr(sls_order_dt, 5, 2) || '-' || substr(sls_order_dt, 7, 2))
+            END)) AS OrderDate,
+        
+        TRIM(MAX(CASE WHEN sls_ship_dt IS NOT NULL THEN
+            date(substr(sls_ship_dt, 1, 4) || '-' || substr(sls_ship_dt, 5, 2) || '-' || substr(sls_ship_dt, 7, 2))
+            END)) AS ShipDate,
+        
+        TRIM(MAX(CASE WHEN sls_due_dt IS NOT NULL THEN
+            date(substr(sls_due_dt, 1, 4) || '-' || substr(sls_due_dt, 5, 2) || '-' || substr(sls_due_dt, 7, 2))
+            END)) AS DueDate,
+        
+        TRIM(MAX(CASE WHEN sls_quantity IS NOT NULL THEN CAST(sls_quantity AS int) END)) AS OrderQuantity,
+        TRIM(MAX(CASE WHEN sls_price IS NOT NULL THEN CAST(sls_price AS int) END)) AS Price
+        
+    FROM bronze_sales_details
+    WHERE sls_ord_num IS NOT NULL
+    GROUP BY sls_ord_num
+), 
+SuperCleanedBronzeSales AS(
+	SELECT 
+	clean1.*,
+	p.ProductID AS SuperCleanedProductID
+	
+	FROM CleanedBronzeSales clean1
+	INNER JOIN silver_prod_info p
+	ON p.ProductKey LIKE '%' || clean1.ProductKey
+)
+
+INSERT INTO silver_sales_details (
+    OrderNumber,
+    ProductKey,
+	CustomerID,
+	OrderDate,
+	ShipDate,
+    DueDate,
+	Sales,
+	Quantity,
+	Price,
+	ProductID
+)
+SELECT 
+    SalesOrderNumber,
+    ProductKey,
+    CustomerID,
+    OrderDate,
+    ShipDate,
+	DueDate,
+	OrderQuantity * Price,
+	OrderQuantity,
+	Price,
+	SuperCleanedProductID
+	
+FROM SuperCleanedBronzeSales;
+
+------------- clean and prepare silver products
+
+select * from bronze_prd_info;
+
+DROP TABLE silver_prod_info;
+CREATE TABLE silver_prod_info (
+    ProductID INTEGER PRIMARY KEY NOT NULL,
+    ProductKey TEXT NOT NULL UNIQUE,
+	ProductName TEXT NOT NULL,
+	ProductCost INTEGER,
+	ProductLine CHAR(1),
+	ProductStartDate DATE NOT NULL,
+	ProductEndDate DATE
+);
+
+WITH CleanedBronzeProdInfo AS(
+	SELECT
+	MAX(CAST(prd_id AS INT) )AS CleanedID,
+	TRIM(MAX(CASE WHEN prd_key IS NOT NULL THEN prd_key END))  as Cleaned_ProductKey,
+	TRIM(MAX(CASE WHEN prd_nm IS NOT NULL THEN prd_nm END))  as Cleaned_ProductName,
+	CAST(TRIM(MAX(CASE WHEN prd_cost IS NOT NULL THEN prd_cost END)) AS INT)  as Cleaned_ProductCost,
+	CAST(TRIM(MAX(CASE WHEN prd_line IS NOT NULL THEN prd_line END))AS CHAR)  as Cleaned_ProductLine,
+	DATE(TRIM(MAX(CASE WHEN prd_start_dt IS NOT NULL THEN prd_start_dt END)))  as Cleaned_ProductDate,
+	DATE(TRIM(MAX(CASE WHEN prd_end_dt IS NOT NULL THEN prd_end_dt END)))  as Cleaned_ProducEndDate
+
+	FROM bronze_prd_info 
+	GROUP BY prd_key
+)
+
+INSERT INTO silver_prod_info (
+    ProductID,
+    ProductKey,
+	ProductName,
+	ProductCost,
+	ProductLine,
+	ProductStartDate,
+	ProductEndDate
+)
+SELECT *
+FROM CleanedBronzeProdInfo
+
