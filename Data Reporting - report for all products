@@ -1,0 +1,64 @@
+
+— Here is the code to generate a complete report for all products in the database
+CREATE VIEW gold_full_product_report AS
+	WITH OrdersWithProductDetails AS(
+		SELECT 
+			s.order_number,
+			s.price,
+			s.quantity,
+			s.sales_amount,
+			s.product_key,
+			s.order_date,
+			s.customer_key, 
+			p.product_name,
+			p.category,
+			p.subcategory,
+			p.maintenance,
+			p.cost,
+			p.product_line
+		FROM gold_fact_sales s
+		LEFT JOIN gold_dim_products p ON p.product_key = s.product_key
+		WHERE order_date IS NOT NULL
+	), 
+
+	AggregatedProductDetails AS (
+	SELECT
+		SUM(quantity) AS total_quantity,
+		COUNT(DISTINCT order_number) AS total_orders,
+		SUM(sales_amount) AS total_sales,
+		ROUND(AVG(CAST(sales_amount AS REAL)/coalesce(quantity,0)),1) AS avg_sales,
+		(strftime('%Y', MAX(order_date) ) - strftime('%Y', MIN(order_date) )) * 12 + (strftime('%m', MAX(order_date) ) - strftime('%m', MIN(order_date) )) -  (CASE WHEN strftime('%d', MAX(order_date) ) >= strftime('%d', MIN(order_date) ) THEN 0 ELSE 1 END)AS lifetime,
+		(strftime('%Y', CURRENT_DATE) - strftime('%Y', MAX(order_date) )) * 12 + (strftime('%m', CURRENT_DATE) - strftime('%m', MAX(order_date) )) -  (CASE WHEN strftime('%d', CURRENT_DATE) >= strftime('%d', MAX(order_date) ) THEN 0 ELSE 1 END)AS months_since_last_sale,
+		COUNT(DISTINCT customer_key) AS total_unique_customers,
+		product_key,
+		product_name,
+		category,
+		subcategory,
+		maintenance,
+		cost,
+		product_line
+	FROM OrdersWithProductDetails
+	Group By product_key)
+
+	SELECT 	
+		total_quantity,
+		total_orders,
+		total_sales,
+		lifetime,
+		avg_sales AS avg_selling_price,
+		product_key,
+		total_unique_customers,
+		product_name,
+		category,
+		subcategory,
+		maintenance,
+		cost,
+		product_line,
+		-- KPIs
+		months_since_last_sale,
+		CASE WHEN total_orders = 0 THEN 0 ELSE total_sales/total_orders END AS avg_order_revenue,
+		CASE WHEN lifetime = 0 THEN total_sales ELSE total_sales/lifetime END AS avg_monthly_revenue,
+		CASE WHEN total_sales > 50000 THEN 'High-Performer'
+			WHEN total_sales >= 10000 THEN 'Mid-Range'
+			ELSE 'Low-Performer' END AS [product_segment]
+	FROM AggregatedProductDetails;
